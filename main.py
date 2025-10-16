@@ -3,7 +3,13 @@ from google import genai
 from google.genai import types
 import os
 import requests
+import time
 
+# Text to speach
+import pyttsx3 # pip install pyttsx3 # If not working: sudo apt update && sudo apt install espeak-ng libespeak1
+engine = pyttsx3.init()
+
+# Environemntal Variables for the api-key
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -13,6 +19,9 @@ load_dotenv()
 askAi = "What is this image? Just say 1 word (the object or whatever it is)"
 
 client = genai.Client(api_key=os.getenv("GemApiKey"))
+
+
+# Loud the sound 
 
 # Input: image_bytes
 # Ouput: Text of the Image.
@@ -43,7 +52,10 @@ def main():
 
     # Ai's Description of the image
     aiImageDescription = sendImageToAI(image)
-
     print(aiImageDescription)
+
+    # Text to speech
+    engine.say(aiImageDescription)
+    engine.runAndWait()
 
 main()
