@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detector AI</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+        }
+
+        h1 {
+            color: #fc8686;
+            margin-bottom: 20px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 800px;
+            gap: 20px;
+        }
+
+        .image-container {
+            width: 100%;
+            background-color: #1e1e1e;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 480px;
+        }
+
+        #motion-image {
+            max-width: 100%;
+            max-height: 600px;
+            display: block;
+        }
+
+        .info-container {
+            background-color: #1e1e1e;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .object-name {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #03dac6;
+            margin-bottom: 10px;
+        }
+
+        .status-text {
+            font-size: 1.2em;
+            color: #bb86fc;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Object Detector AI</h1>
+
+    <div class="container">
+        <div class="image-container">
+            <img id="motion-image" src="/image" alt="Waiting for motion..." onerror="this.style.display='none'">
+        </div>
+
+        <div class="info-container">
+            <div class="object-name" id="object-name">Waiting...</div>
+            <div class="status-text" id="status-text">Initializing...</div>
+        </div>
+    </div>
+
+    <script>
+        const objectNameElement = document.getElementById('object-name');
+        const statusTextElement = document.getElementById('status-text');
+        const motionImage = document.getElementById('motion-image');
+
+        function fetchStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    objectNameElement.textContent = data.object || "Waiting...";
+                    statusTextElement.textContent = data.status || "Monitoring";
+                })
+                .catch(err => console.error('Error fetching status:', err));
+        }
+
+        // Refresh image every second
+        setInterval(() => {
+            motionImage.src = "/image?t=" + new Date().getTime();
+            motionImage.style.display = 'block';
+        }, 1000);
+
+        // Fetch status every second
+        setInterval(fetchStatus, 1000);
+    </script>
+</body>
+
+</html>

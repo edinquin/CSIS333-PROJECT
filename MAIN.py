@@ -3,6 +3,16 @@ import cv2
 import time
 import os
 from picamera2 import Picamera2
+import threading
+from datetime import datetime
+from flask import Flask, render_template, jsonify, Response, send_file
+import logging
+import socket
+import netifaces
+
+# Stop Flask Debugging
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 # AI Packages
 from google import genai
@@ -18,6 +28,26 @@ client = genai.Client(api_key=os.getenv("GemApiKey"))
 
 askAi = "Identify the main object in the image with a single word. If a hand is holding an object, identify only the held object. If no clear object is present or identifiable, respond with nothing."
 
+# Flask App Setup
+app = Flask(__name__)
+
+# Global State
+current_status = "Initializing..."
+last_object = "Waiting..."
+state_lock = threading.Lock()
+
+def update_status(status):
+    global current_status
+    with state_lock:
+        current_status = status
+    print(f"[STATUS] {status}")
+
+def update_object(obj_name):
+    global last_object
+    with state_lock:
+        last_object = obj_name
+    print(f"[OBJECT] {obj_name}")
+
 def sendImageToAI(image_bytes):
     response = client.models.generate_content(
         model='gemini-2.5-flash',
@@ -31,6 +61,7 @@ def sendImageToAI(image_bytes):
     return response.text
 
 def say(text):
+    update_status(f"Playing Audio: {text}")
     language = 'en'
     tts = gTTS(text=text, lang=language, slow=False)
     tts.save("output.mp3")
@@ -67,22 +98,22 @@ def motion_detection(newFrame, oldFrame, frame):
     
     return False
 
-def main():
+def run_camera_loop():
     # Setup Camera
     picam2 = Picamera2(camera_num=0)
     config = picam2.create_preview_configuration(main={"size": (640, 480), "format": "RGB888"})
     picam2.configure(config)
     picam2.start()
-    print("Camera started successfully.")
+    print("\n\n")
+    update_status("Camera started. Monitoring...")
 
     backgroundFrame = None
     prevFrame = None
+    
     lastObject = ""
 
     motionActive = False
     lastMotionTime = 0.0
-
-    frameCount = 0
 
     while True:
         # Delay
@@ -103,7 +134,8 @@ def main():
         gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
         if backgroundFrame is None:
-            print("Background set." + "\n" + "-" * 20)
+            print("open http://" + netifaces.ifaddresses("wlan0")[netifaces.AF_INET][0]['addr'] + ":5000")
+            print("Background set.\n" + "-" * 20)
             backgroundFrame = gray
             prevFrame = gray
             continue
@@ -130,10 +162,13 @@ def main():
                     objectPresent = motion_detection(gray, backgroundFrame, frame)
                     
                     if objectPresent:
-                        print("Sending To Ai.")
+                        update_status("Sending to AI...")
                         _, buffer = cv2.imencode('.jpg', frame)
                         text = sendImageToAI(buffer.tobytes())
-                        print("Ai Response: " + text)
+
+                        update_status(f"AI Response: {text}")
+                        update_object(text)
+
                         if  text != lastObject:
                             say(text)
                             lastObject = text
@@ -144,16 +179,40 @@ def main():
                             print("Same Object is Shown.")
                             print("-" * 20)
 
+                    update_status("Monitoring...")
                     time.sleep(1)
 
                     # Reset motion state
                     motionActive = False
-        
+
         # Update previous frame
         prevFrame = gray
 
     picam2.stop()
-            
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/status')
+def get_status():
+    with state_lock:
+        return jsonify({"status": current_status, "object": last_object})
+
+@app.route('/image')
+def get_image():
+    if os.path.exists('motion.jpg'):
+        return send_file('motion.jpg', mimetype='image/jpeg')
+    else:
+        return "No image available", 404
+
+def main():
+    # Start camera loop in a separate thread
+    camera_thread = threading.Thread(target=run_camera_loop, daemon=True)
+    camera_thread.start()
+    
+    # Run Flask app
+    app.run(host='0.0.0.0', port=5000, debug=False)
 
 if __name__ == "__main__":
     main()
